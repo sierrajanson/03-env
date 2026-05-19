@@ -31,8 +31,10 @@ data Expr = PlusE Expr Expr
 -- -6
 
 simpleEval :: Expr -> Int
-simpleEval expr = error "TBD: simpleEval"
-
+simpleEval (NumE a) = a 
+simpleEval (PlusE e1 e2) = (simpleEval e1) + (simpleEval e2)
+simpleEval (MinusE e1 e2) = (simpleEval e1) - (simpleEval e2)
+simpleEval (TimesE e1 e2) = (simpleEval e1) * (simpleEval e2)
 
 
 
@@ -69,8 +71,9 @@ simpleEval expr = error "TBD: simpleEval"
 -- Nothing
 
 opMaybe :: (Int -> Int -> Int) -> Maybe Int -> Maybe Int -> Maybe Int
-opMaybe op m1 m2 = error "TBD: opMaybe"
-
+opMaybe op _ Nothing = Nothing
+opMaybe op Nothing _ = Nothing
+opMaybe op (Just m1) (Just m2) = Just (op m1 m2) 
 
 
 
@@ -105,10 +108,19 @@ type ListEnv = [(String, Int)]
 -- >>> varExprListEval [] (TimesVE (NumVE 7) (NumVE 3))
 -- Just 21
 
+lookupInEnv2 :: ListEnv -> String -> Maybe Int
+lookupInEnv2 [] _ = Nothing
+lookupInEnv2 ((k,v):xs) target = case (k==target) of
+    True -> Just v
+    False -> lookupInEnv2 xs target
+
 varExprListEval :: ListEnv -> VarExpr -> Maybe Int
-varExprListEval env expr = error "TBD: varEval"
-
-
+--varExprListEval env expr = error "TBD: varEval"
+varExprListEval env (NumVE e) = Just e
+varExprListEval env (Var e) = lookupInEnv2 env e
+varExprListEval env (PlusVE e1 e2) = opMaybe (+) (varExprListEval env e1) (varExprListEval env e2)
+varExprListEval env (TimesVE e1 e2) = opMaybe (*) (varExprListEval env e1) (varExprListEval env e2)
+varExprListEval env (MinusVE e1 e2) = opMaybe (-) (varExprListEval env e1) (varExprListEval env e2)
 
 
 
@@ -137,7 +149,11 @@ type FunEnv = String -> Maybe Int
 -- Just 21
 
 varExprFunEval :: FunEnv -> VarExpr -> Maybe Int
-varExprFunEval env expr = error "TBD: varExprFunEval"
+varExprFunEval env (Var e) = env e
+varExprFunEval env (NumVE e) = Just e
+varExprFunEval env (PlusVE e1 e2) = opMaybe (+) (varExprFunEval env e1) (varExprFunEval env e2)
+varExprFunEval env (TimesVE e1 e2) = opMaybe (*) (varExprFunEval env e1) (varExprFunEval env e2)
+varExprFunEval env (MinusVE e1 e2) = opMaybe (-) (varExprFunEval env e1) (varExprFunEval env e2)
 
 
 
@@ -164,9 +180,11 @@ varExprFunEval env expr = error "TBD: varExprFunEval"
 
 instance Show VarExpr where
   show :: VarExpr -> String
-  show expr = error "TBD: show"
-
-
+  show (Var e) = show e
+  show (NumVE e) = show e
+  show (TimesVE e1 e2) = "("++(show e1)++" * "++(show e2)++")"
+  show (PlusVE e1 e2) = "("++(show e1)++" + "++(show e2)++")"
+  show (MinusVE e1 e2) = "("++(show e1)++" - "++(show e2)++")"
 
 
 -- | `(==)` takes two `VarExpr`s and compares them for equality,
@@ -188,8 +206,7 @@ instance Show VarExpr where
 
 instance Eq VarExpr where
   (==) :: VarExpr -> VarExpr -> Bool
-  (==) expr1 expr2 = error "TBD: (==)"
-
+  (==) e1 e2 = (varExprFunEval (\v -> Nothing) e1) == (varExprFunEval (\v -> Nothing) e2)
 
 
 
@@ -220,27 +237,27 @@ class Env a where
 
 instance Env ListEnv where
   emptyEnv :: ListEnv
-  emptyEnv = error "TBD: emptyEnv"
+  emptyEnv = []
 
 
   lookupInEnv :: String -> ListEnv -> Maybe Int
-  lookupInEnv s env = error "TBD: lookupInEnv"
+  lookupInEnv s env = lookupInEnv2 env s
 
 
   extendEnv :: String -> Int -> ListEnv -> ListEnv
-  extendEnv s n env = error "TBD: extendEnv"
+  extendEnv s n env = [(s,n)] ++ env
 
 instance Env FunEnv where
   emptyEnv :: FunEnv
-  emptyEnv = error "TBD: emptyEnv"
+  emptyEnv = \v -> Nothing
 
 
   lookupInEnv :: String -> FunEnv -> Maybe Int
-  lookupInEnv s env = error "TBD: lookupInEnv"
+  lookupInEnv s env = env s
 
 
   extendEnv :: String -> Int -> FunEnv -> FunEnv
-  extendEnv s n env = error "TBD: extendEnv"
+  extendEnv s n env = \v -> if v == s then (Just n) else (env v)
 
 
 
@@ -282,10 +299,11 @@ instance Env FunEnv where
 -- Just 21
 
 varExprEval :: Env a => a -> VarExpr -> Maybe Int
-varExprEval env expr = error "TBD: varExprEval"
-
-
-
+varExprEval env (NumVE e) = Just e
+varExprEval env (Var e) = lookupInEnv e env
+varExprEval env (PlusVE e1 e2) = opMaybe (+) (varExprEval env e1) (varExprEval env e2)
+varExprEval env (TimesVE e1 e2) = opMaybe (*) (varExprEval env e1) (varExprEval env e2)
+varExprEval env (MinusVE e1 e2) = opMaybe (-) (varExprEval env e1) (varExprEval env e2)
 
 
 -- | `evalAll` takes a list of `VarExpr`s and an environment,
@@ -331,7 +349,8 @@ varExprEval env expr = error "TBD: varExprEval"
 evalAll :: Env a => a -> [VarExpr] -> [Maybe Int]
 evalAll env exprs = map f exprs
   where f :: VarExpr -> Maybe Int
-        f expr = error "TBD: evalAll"
+        f expr = varExprEval env expr
+
 
 
 
@@ -382,5 +401,4 @@ evalAll env exprs = map f exprs
 sumEval :: Env a => a -> [VarExpr] -> Maybe Int
 sumEval env exprs = foldr f (Just 0) exprs
   where f :: VarExpr -> Maybe Int -> Maybe Int
-        f expr m = error "TBD: sumEval"
-
+        f expr m = opMaybe (+) (varExprEval env expr) m
